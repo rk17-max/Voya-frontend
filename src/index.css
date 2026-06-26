@@ -1,0 +1,4 @@
+@import "tailwindcss";
+
+/* Notice this is OUTSIDE and there is no @theme block at all! */
+@custom-variant dark (&:where(.dark, .dark *));
