@@ -1,37 +1,37 @@
 /**
  * ============================================================
- *  Navbar.jsx — Premium Travel Booking Platform
- *  "voya" — curated travel for the discerning traveler
+ * Navbar.jsx — Premium Travel Booking Platform
+ * "voya" — curated travel for the discerning traveler
  * ============================================================
  *
- *  The third sibling of Signup.jsx and Login.jsx.
- *  Inherits the exact TOKENS, gold accent, and Antique Gold
- *  radar-dot logo from its siblings.
+ * The third sibling of Signup.jsx and Login.jsx.
+ * Inherits the exact TOKENS, gold accent, and Antique Gold
+ * radar-dot logo from its siblings.
  *
- *  New capabilities:
- *   ✦ Scroll-aware transparency → backdrop-blur on scroll
- *   ✦ Dark / Light theme toggle (writes `dark` to <html>)
- *   ✦ Data-driven NAV_ITEMS — push new routes in one place
- *   ✦ Guest state: Sign In ghost + Request Invitation gold pill
- *   ✦ Member state: avatar + animated dropdown menu
- *   ✦ Mobile: right-side full-height drawer with AnimatePresence
+ * New capabilities:
+ * ✦ Scroll-aware transparency → backdrop-blur on scroll
+ * ✦ Dark / Light theme toggle (writes `dark` to <html>)
+ * ✦ Data-driven NAV_ITEMS — push new routes in one place
+ * ✦ Guest state: Sign In ghost + Request Invitation gold pill
+ * ✦ Member state: avatar + animated dropdown menu
+ * ✦ Mobile: right-side full-height drawer with AnimatePresence
  *
- *  Stack:
- *    • React 18 + JSX
- *    • Tailwind CSS (JIT, dark-mode: 'class')
- *    • Framer Motion
- *    • lucide-react
+ * Stack:
+ * • React 18 + JSX
+ * • Tailwind CSS (JIT, dark-mode: 'class')
+ * • Framer Motion
+ * • lucide-react
  *
- *  Tailwind config prerequisite (tailwind.config.js):
- *    module.exports = { darkMode: 'class', ... }
+ * Tailwind config prerequisite (tailwind.config.js):
+ * module.exports = { darkMode: 'class', ... }
  *
- *  Install dependencies (shared with Signup / Login):
- *    npm install framer-motion lucide-react
+ * Install dependencies (shared with Signup / Login):
+ * npm install framer-motion lucide-react
  *
- *  Usage:
- *    import Navbar from "./Navbar";
- *    <Navbar isAuthenticated={false} />
- *    <Navbar isAuthenticated={true} memberName="Isabelle Fontaine" />
+ * Usage:
+ * import Navbar from "./Navbar";
+ * <Navbar isAuthenticated={false} />
+ * <Navbar isAuthenticated={true} memberName="Isabelle Fontaine" />
  * ============================================================
  */
 
@@ -51,6 +51,7 @@ import {
   Sparkles,
   BookOpen,
   Home,
+  User, // <-- Added the User icon for the Profile link
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -121,6 +122,11 @@ const NAV_ITEMS = [
  * dividerBefore: inserts a separator line before this item.
  */
 const MEMBER_MENU_ITEMS = [
+  {
+    label:   "My Profile",
+    href:    "/profile",
+    icon:    <User size={14} />,
+  },
   {
     label:   "My Itineraries",
     href:    "/itineraries",
@@ -406,8 +412,8 @@ const ThemeToggle = ({ isDark, onToggle, mode }) => {
 /**
  * Shown when `isAuthenticated={false}`.
  * Two buttons:
- *   - "Sign In"            — ghost (transparent + border)
- *   - "Request Invitation" — filled gold pill, the primary CTA
+ * - "Sign In"            — ghost (transparent + border)
+ * - "Request Invitation" — filled gold pill, the primary CTA
  *
  * @param {string} mode — "dark" | "light"
  */
@@ -679,11 +685,11 @@ const MemberDropdown = ({ memberName, mode }) => {
  * A frosted-glass scrim covers the rest of the screen — tap to close.
  *
  * Drawer contains:
- *   - Voya logo at top
- *   - All NAV_ITEMS with icons
- *   - Divider
- *   - Member items (if authenticated) OR guest auth buttons
- *   - Theme toggle at the bottom
+ * - Voya logo at top
+ * - All NAV_ITEMS with icons
+ * - Divider
+ * - Member items (if authenticated) OR guest auth buttons
+ * - Theme toggle at the bottom
  *
  * @param {boolean}  isOpen           — Whether the drawer is visible
  * @param {Function} onClose          — Callback to close the drawer
@@ -1029,14 +1035,14 @@ const MobileDrawer = ({
  * The primary navigation bar for the Voya platform.
  *
  * Props:
- *  @param {boolean} [isAuthenticated=false] — Guest vs member UI
- *  @param {string}  [memberName=""]         — Full name for avatar initials + greeting
- *  @param {string}  [activePath=""]         — Current route path for active link states
+ * @param {boolean} [isAuthenticated=false] — Guest vs member UI
+ * @param {string}  [memberName=""]         — Full name for avatar initials + greeting
+ * @param {string}  [activePath=""]         — Current route path for active link states
  *
  * Internal state:
- *  - isDark      bool   — Theme (synced to <html class="dark"> via useTheme hook)
- *  - scrolled    bool   — True after 12px scroll (triggers backdrop-blur)
- *  - drawerOpen  bool   — Mobile drawer visibility
+ * - isDark      bool   — Theme (synced to <html class="dark"> via useTheme hook)
+ * - scrolled    bool   — True after 12px scroll (triggers backdrop-blur)
+ * - drawerOpen  bool   — Mobile drawer visibility
  */
 export default function Navbar({
   isAuthenticated = false,

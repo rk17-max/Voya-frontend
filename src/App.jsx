@@ -4,11 +4,13 @@ import Signup from './Signup';
 import Login from './Login';
 import Home from './Home';
 import PropertyDetails from './PropertyDetails';
+import Profile from './Profile'; // ── IMPORT THE NEW PROFILE PAGE ──
+import Footer from './Footer';
 
-import axios from 'axios'
+import axios from 'axios';
+
 export default function App() {
   // ── Route & Auth State ──
-  // Default to a loading state while we check the cookie
   const [route, setRoute] = useState('loading');
   const [isAuth, setIsAuth] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
@@ -20,19 +22,13 @@ export default function App() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // We will create this endpoint next! 
-        // It reads the HTTP-only cookie and returns the user's profile.
         const response = await axios.get('http://localhost:5000/api/user/details', {
           withCredentials: true
         });
         setIsAuth(true);
-        // Assuming your backend returns { success: true, user: { firstname, lastname, ... } }
         setUserProfile(response.data.user);
-        
-        // If they are logged in, send them to home!
         setRoute('home');
       } catch (error) {
-        // If the request fails (no cookie, expired token, etc.), they are not logged in.
         setIsAuth(false);
         setUserProfile(null);
         setRoute('login');
@@ -41,6 +37,21 @@ export default function App() {
 
     checkAuth();
   }, []);
+
+  // ── Shared Logout Function ──
+  const handleLogout = async () => {
+    try {
+      await axios.post('http://localhost:5000/api/user/logout', {}, {
+        withCredentials: true
+      }); 
+    } catch (err) {
+      console.error("Failed to log out cleanly", err);
+    }
+    setIsAuth(false);
+    setUserProfile(null);
+    setRoute('login');
+    setSelectedPropertyId(null);
+  };
 
   // ── Central Navigation Hub ──
   const handleNavigation = async (e) => {
@@ -53,8 +64,8 @@ export default function App() {
 
       e.preventDefault(); 
       
-      // 1. Handle standard routes
-      if (href === '/login' || href === '/signup' || href === '/home' || href === '/') {
+      // 1. Handle standard routes (Added /profile here)
+      if (href === '/login' || href === '/signup' || href === '/home' || href === '/' || href === '/profile') {
         const newRoute = href === '/' ? 'home' : href.replace('/', '');
         setRoute(newRoute);
         setSelectedPropertyId(null);
@@ -69,18 +80,7 @@ export default function App() {
       
       // 3. Handle Logging out
       else if (href === '/logout') {
-        try {
-          // Call the backend to clear the cookie
-          await axios.post('http://localhost:5000/api/user/logout', {}, {
-            withCredentials: true
-          }); 
-        } catch (err) {
-          console.error("Failed to log out cleanly", err);
-        }
-        setIsAuth(false);
-        setUserProfile(null);
-        setRoute('login');
-        setSelectedPropertyId(null);
+        handleLogout();
       }
     }
   };
@@ -109,11 +109,21 @@ export default function App() {
       
       {/* ── Dynamic Route Rendering ── */}
       {route === 'login' && <Login />}
-  {route === 'signup' && <Signup />}
-  {route === 'home' && <Home userProfile={userProfile} />}
-  
-  {route === 'property' && <PropertyDetails propertyId={selectedPropertyId} />}
+      {route === 'signup' && <Signup />}
+      {route === 'home' && <Home userProfile={userProfile} />}
+      {route === 'property' && <PropertyDetails propertyId={selectedPropertyId} />}
+      
+      {/* ── Render Profile Page ── */}
+      {route === 'profile' && (
+        <Profile 
+          userProfile={userProfile} 
+          onProfileUpdate={setUserProfile} 
+          onLogout={handleLogout}
+        />
+      )}
 
+      {/* ── ONLY SHOW FOOTER IF NOT ON AUTH PAGES ── */}
+      {route !== 'login' && route !== 'signup' && <Footer />}
     </div>
   );
 }

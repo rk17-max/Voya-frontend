@@ -5,25 +5,314 @@
  * ============================================================
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
 import {
   ArrowLeft, MapPin, Star, Heart, Share2, Wifi, Waves, Coffee, Sparkles,
   UtensilsCrossed, Droplets, Bike, Bell, TreePine, Wind, ShieldCheck, Dumbbell,
-  Users, CalendarDays, Minus, Plus, Info, Award, Compass, AlertCircle, MessageSquare
+  Users, CalendarDays, Minus, Plus, Info, Award, Compass, AlertCircle, MessageSquare,
+  ChevronLeft, ChevronRight, Calendar as CalendarIcon, RotateCcw
 } from "lucide-react";
+import { 
+  addMonths, subMonths, format, startOfMonth, endOfMonth, startOfWeek, 
+  endOfWeek, eachDayOfInterval, isSameMonth, isSameDay, isToday, isBefore, 
+  isAfter, isWithinInterval, differenceInCalendarDays, parseISO, startOfDay 
+} from "date-fns";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 1. DESIGN TOKENS & HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
+/* ==========================================================================
+   1. CALENDAR COMPONENT (Integrated)
+   ========================================================================== */
+const CALENDAR_TOKENS = {
+  bgMain: "#141720",
+  bgBody: "#0C0E14",
+  textPrimary: "#F2EDE6",
+  textMuted: "rgba(242, 237, 230, 0.42)",
+  textBlocked: "rgba(242, 237, 230, 0.18)",
+  goldPrimary: "#C8A97E",
+  goldHover: "#D6BC96",
+  goldWash: "rgba(200, 169, 126, 0.12)",
+  goldWashStrong: "rgba(200, 169, 126, 0.22)",
+  borderSubtle: "rgba(255, 255, 255, 0.07)",
+  borderStrong: "rgba(200, 169, 126, 0.35)",
+};
+
+const normalizeToStartOfDay = (dateInput) => {
+  if (!dateInput) return null;
+  const parsed = typeof dateInput === "string" ? parseISO(dateInput) : dateInput;
+  return startOfDay(parsed);
+};
+
+const formatCurrency = (amount) => {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(amount);
+};
+
+const slideVariants = {
+  enter: (direction) => ({
+    x: direction > 0 ? 40 : -40,
+    opacity: 0,
+  }),
+  center: {
+    x: 0,
+    opacity: 1,
+    transition: {
+      x: { type: "spring", stiffness: 300, damping: 30 },
+      opacity: { duration: 0.2 },
+    },
+  },
+  exit: (direction) => ({
+    x: direction > 0 ? -40 : 40,
+    opacity: 0,
+    transition: {
+      x: { type: "spring", stiffness: 300, damping: 30 },
+      opacity: { duration: 0.15 },
+    },
+  }),
+};
+
+const summaryVariants = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    transition: { type: "spring", stiffness: 400, damping: 25 }
+  },
+  exit: { opacity: 0, y: 12, transition: { duration: 0.15 } }
+};
+
+const MonthGrid = ({
+  monthDate,
+  checkIn,
+  checkOut,
+  hoverDate,
+  bookedSet,
+  onDayClick,
+  onDayHover,
+  today,
+}) => {
+  const monthStart = startOfMonth(monthDate);
+  const monthEnd = endOfMonth(monthDate);
+  const calendarStart = startOfWeek(monthStart);
+  const calendarEnd = endOfWeek(monthEnd);
+
+  const days = useMemo(() => {
+    return eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+  }, [calendarStart, calendarEnd]);
+
+  const weekDays = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+  return (
+    <div className="flex flex-col select-none">
+      <div className="h-12 flex items-center justify-center mb-2">
+        <h3 className="text-lg font-normal tracking-wide text-[#F2EDE6]" style={{ fontFamily: "'Playfair Display', Georgia, serif" }}>
+          {format(monthDate, "MMMM yyyy")}
+        </h3>
+      </div>
+      <div className="grid grid-cols-7 mb-3 text-center">
+        {weekDays.map((day, idx) => (
+          <span key={idx} className="text-xs font-medium tracking-wider uppercase" style={{ color: CALENDAR_TOKENS.textMuted, fontFamily: "'Inter', sans-serif" }}>
+            {day}
+          </span>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-y-1.5 relative z-10">
+        {days.map((dayStr) => {
+          const day = dayStr;
+          const isCurrentMonth = isSameMonth(day, monthDate);
+          const isPast = isBefore(day, today);
+          const timeKey = day.getTime();
+          const isBooked = bookedSet.has(timeKey);
+          const isDisabled = !isCurrentMonth || isPast || isBooked;
+
+          const isSelectedCheckIn = checkIn && isSameDay(day, checkIn);
+          const isSelectedCheckOut = checkOut && isSameDay(day, checkOut);
+          const isSelected = isSelectedCheckIn || isSelectedCheckOut;
+
+          const activeEnd = checkOut || hoverDate;
+          const isInRange = checkIn && activeEnd && isAfter(activeEnd, checkIn) && 
+                            isWithinInterval(day, { start: checkIn, end: activeEnd }) &&
+                            !isSelected;
+
+          const isTentative = !checkOut && hoverDate && isInRange;
+
+          return (
+            <div key={day.toISOString()} className="relative h-10 flex items-center justify-center" onMouseEnter={() => !isDisabled && onDayHover(day)}>
+              {isCurrentMonth && (
+                <>
+                  {(isInRange || isSelectedCheckOut || (isSelectedCheckIn && activeEnd && isAfter(activeEnd, checkIn))) && (
+                    <div className={`absolute top-1 bottom-1 ${isSelectedCheckIn ? 'left-1/2 right-0' : isSelectedCheckOut ? 'left-0 right-1/2' : 'inset-x-0'}`} style={{ backgroundColor: isTentative ? CALENDAR_TOKENS.goldWash : CALENDAR_TOKENS.goldWashStrong, transition: "background-color 0.15s ease" }} />
+                  )}
+                </>
+              )}
+              <button
+                type="button"
+                disabled={isDisabled}
+                onClick={() => onDayClick(day)}
+                className={`relative w-10 h-10 rounded-full flex items-center justify-center text-sm transition-all duration-200 z-10 ${!isCurrentMonth ? "opacity-0 pointer-events-none" : isDisabled ? "cursor-not-allowed" : "cursor-pointer"}`}
+                style={{
+                  fontFamily: "'Inter', sans-serif",
+                  color: isSelected ? CALENDAR_TOKENS.bgMain : isDisabled ? CALENDAR_TOKENS.textBlocked : CALENDAR_TOKENS.textPrimary,
+                  backgroundColor: isSelected ? CALENDAR_TOKENS.goldPrimary : "transparent",
+                  fontWeight: isSelected ? 600 : isToday(day) ? 600 : 400,
+                  boxShadow: isSelected ? "0 0 16px rgba(200, 169, 126, 0.45)" : "none",
+                }}
+              >
+                {!isDisabled && !isSelected && <span className="absolute inset-1 rounded-full border border-transparent hover:border-[#C8A97E]/60 transition-colors duration-150" />}
+                <span className={isBooked ? "line-through decoration-white/30" : ""}>{format(day, "d")}</span>
+                {isToday(day) && !isSelected && <span className="absolute bottom-1.5 w-1 h-1 rounded-full" style={{ backgroundColor: CALENDAR_TOKENS.goldPrimary }} />}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+function VoyaCalendar({ pricePerNight = 32000, bookedDates = [], onRangeSelect }) {
+  const today = useMemo(() => startOfDay(new Date()), []);
+  const [currentMonth, setCurrentMonth] = useState(startOfMonth(today));
+  const [direction, setDirection] = useState(1);
+  const [checkIn, setCheckIn] = useState(null);
+  const [checkOut, setCheckOut] = useState(null);
+  const [hoverDate, setHoverDate] = useState(null);
+
+  const bookedSet = useMemo(() => {
+    const set = new Set();
+    bookedDates.forEach((d) => {
+      const norm = normalizeToStartOfDay(d);
+      if (norm) set.add(norm.getTime());
+    });
+    return set;
+  }, [bookedDates]);
+
+  const hasBookedConflict = useCallback((start, end) => {
+    if (!start || !end || isBefore(end, start)) return false;
+    const intervalDays = eachDayOfInterval({ start, end });
+    return intervalDays.some(day => bookedSet.has(day.getTime()));
+  }, [bookedSet]);
+
+  const handlePrevMonth = () => { setDirection(-1); setCurrentMonth(prev => subMonths(prev, 1)); };
+  const handleNextMonth = () => { setDirection(1); setCurrentMonth(prev => addMonths(prev, 1)); };
+
+  const handleDayClick = useCallback((clickedDay) => {
+    if (!checkIn || (checkIn && checkOut)) {
+      setCheckIn(clickedDay); setCheckOut(null);
+      if (onRangeSelect) onRangeSelect({ checkIn: clickedDay, checkOut: null, totalNights: 0, totalPrice: 0 });
+      return;
+    }
+    if (isBefore(clickedDay, checkIn)) { setCheckIn(clickedDay); return; }
+    if (isSameDay(clickedDay, checkIn)) {
+      setCheckIn(null); setHoverDate(null);
+      if (onRangeSelect) onRangeSelect({ checkIn: null, checkOut: null, totalNights: 0, totalPrice: 0 });
+      return;
+    }
+    if (hasBookedConflict(checkIn, clickedDay)) { setCheckIn(clickedDay); return; }
+
+    setCheckOut(clickedDay);
+    setHoverDate(null);
+    const nights = differenceInCalendarDays(clickedDay, checkIn);
+    const total = nights * pricePerNight;
+    if (onRangeSelect) onRangeSelect({ checkIn, checkOut: clickedDay, totalNights: nights, totalPrice: total });
+  }, [checkIn, checkOut, hasBookedConflict, onRangeSelect, pricePerNight]);
+
+  const handleDayHover = useCallback((day) => {
+    if (checkIn && !checkOut) {
+      if (isAfter(day, checkIn) && !hasBookedConflict(checkIn, day)) setHoverDate(day);
+      else setHoverDate(null);
+    }
+  }, [checkIn, checkOut, hasBookedConflict]);
+
+  const handleReset = () => {
+    setCheckIn(null); setCheckOut(null); setHoverDate(null);
+    if (onRangeSelect) onRangeSelect({ checkIn: null, checkOut: null, totalNights: 0, totalPrice: 0 });
+  };
+
+  const totalNights = useMemo(() => {
+    if (!checkIn || !checkOut) return 0;
+    return differenceInCalendarDays(checkOut, checkIn);
+  }, [checkIn, checkOut]);
+
+  const totalPrice = totalNights * pricePerNight;
+  const nextMonth = useMemo(() => addMonths(currentMonth, 1), [currentMonth]);
+
+  return (
+    <div className="w-full max-w-4xl mx-auto rounded-2xl p-6 md:p-8 border relative overflow-hidden shadow-2xl" style={{ backgroundColor: CALENDAR_TOKENS.bgMain, borderColor: CALENDAR_TOKENS.borderSubtle, boxShadow: "0 24px 50px -12px rgba(0, 0, 0, 0.5)" }}>
+      <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-48 rounded-full blur-3xl pointer-events-none opacity-20" style={{ backgroundColor: CALENDAR_TOKENS.goldPrimary }} />
+      <div className="flex items-center justify-between pb-6 mb-4 border-b border-white/[0.07] relative z-10">
+        <div className="flex items-center gap-2.5">
+          <CalendarIcon size={18} style={{ color: CALENDAR_TOKENS.goldPrimary }} />
+          <span className="text-xs font-semibold uppercase tracking-widest text-[#F2EDE6]" style={{ fontFamily: "'Inter', sans-serif" }}>Select Dates</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={handlePrevMonth} disabled={isBefore(currentMonth, startOfMonth(today))} className="w-9 h-9 rounded-full flex items-center justify-center border transition-all duration-200 disabled:opacity-20 disabled:cursor-not-allowed hover:border-[#C8A97E] hover:bg-white/[0.02]" style={{ borderColor: CALENDAR_TOKENS.borderSubtle, color: CALENDAR_TOKENS.textPrimary }}>
+            <ChevronLeft size={18} />
+          </button>
+          <button type="button" onClick={handleNextMonth} className="w-9 h-9 rounded-full flex items-center justify-center border transition-all duration-200 hover:border-[#C8A97E] hover:bg-white/[0.02]" style={{ borderColor: CALENDAR_TOKENS.borderSubtle, color: CALENDAR_TOKENS.textPrimary }}>
+            <ChevronRight size={18} />
+          </button>
+        </div>
+      </div>
+      <div className="relative overflow-hidden min-h-[340px]">
+        <AnimatePresence initial={false} custom={direction} mode="popLayout">
+          <motion.div key={currentMonth.toISOString()} custom={direction} variants={slideVariants} initial="enter" animate="center" exit="exit" className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
+            <MonthGrid monthDate={currentMonth} checkIn={checkIn} checkOut={checkOut} hoverDate={hoverDate} bookedSet={bookedSet} onDayClick={handleDayClick} onDayHover={handleDayHover} today={today} />
+            <div className="hidden md:block">
+              <MonthGrid monthDate={nextMonth} checkIn={checkIn} checkOut={checkOut} hoverDate={hoverDate} bookedSet={bookedSet} onDayClick={handleDayClick} onDayHover={handleDayHover} today={today} />
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+      <div className="mt-8 pt-6 border-t border-white/[0.07] min-h-[72px] flex items-center justify-between relative z-10">
+        <AnimatePresence mode="wait">
+          {!checkIn ? (
+            <motion.div key="prompt" variants={summaryVariants} initial="hidden" animate="visible" exit="exit" className="flex items-center gap-2 text-sm" style={{ color: CALENDAR_TOKENS.textMuted, fontFamily: "'Inter', sans-serif" }}>
+              <Info size={16} className="text-[#C8A97E]" /><span>Select a Check-In date to begin your reservation.</span>
+            </motion.div>
+          ) : !checkOut ? (
+            <motion.div key="partial" variants={summaryVariants} initial="hidden" animate="visible" exit="exit" className="flex items-center gap-3">
+              <div className="px-3 py-1 rounded-md text-xs font-medium bg-[#C8A97E]/15 text-[#C8A97E] border border-[#C8A97E]/30" style={{ fontFamily: "'Inter', sans-serif" }}>Check-In: {format(checkIn, "MMM d, yyyy")}</div>
+              <span className="text-sm text-white/50 animate-pulse">Select Check-Out date...</span>
+            </motion.div>
+          ) : (
+            <motion.div key="complete" variants={summaryVariants} initial="hidden" animate="visible" exit="exit" className="flex flex-wrap items-center justify-between w-full gap-4">
+              <div className="flex items-center gap-6">
+                <div>
+                  <p className="text-xs text-white/40 uppercase tracking-wider mb-0.5 font-sans">Duration</p>
+                  <p className="text-base font-medium text-[#F2EDE6] font-sans flex items-center gap-1.5"><Sparkles size={15} className="text-[#C8A97E]" />{totalNights} {totalNights === 1 ? "Night" : "Nights"}</p>
+                </div>
+                <div className="h-8 w-[1px] bg-white/10" />
+                <div>
+                  <p className="text-xs text-white/40 uppercase tracking-wider mb-0.5 font-sans">Total Investment</p>
+                  <p className="text-xl font-semibold text-[#C8A97E] tracking-tight" style={{ fontFamily: "'Inter', sans-serif" }}>
+                    {formatCurrency(totalPrice)}<span className="text-xs font-normal text-white/40 ml-1.5">({formatCurrency(pricePerNight)} / night)</span>
+                  </p>
+                </div>
+              </div>
+              <button type="button" onClick={handleReset} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors duration-150 text-white/50 hover:text-white hover:bg-white/[0.05]"><RotateCcw size={13} /><span>Reset Dates</span></button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+
+/* ==========================================================================
+   2. DESIGN TOKENS & HELPERS (PROPERTY DETAILS)
+   ========================================================================== */
 const GOLD        = "#C8A97E";
 const GOLD_HOVER  = "#D9BC96";
 const GOLD_MUTED  = "rgba(200,169,126,0.65)";
 const GOLD_SUBTLE = "rgba(200,169,126,0.12)";
 const GOLD_RING   = "rgba(200,169,126,0.30)";
 
-const formatPrice = (n) => "₹" + n.toLocaleString("en-IN");
+const formatPrice = (n) => "₹" + (n || 0).toLocaleString("en-IN");
 
 const AMENITY_ICONS = {
   "Private Infinity Pool": Waves, "In-villa Chef": UtensilsCrossed, "Daily Housekeeping": Sparkles,
@@ -58,7 +347,7 @@ const DEFAULT_PROPERTY = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 2. ANIMATION VARIANTS & SHARED UI
+// 3. ANIMATION VARIANTS & SHARED UI
 // ─────────────────────────────────────────────────────────────────────────────
 const pageVariants = { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { duration: 0.45, ease: "easeOut" } } };
 const heroVariants = { hidden: {}, visible: { transition: { staggerChildren: 0.12, delayChildren: 0.1 } } };
@@ -92,7 +381,7 @@ const SectionHeader = ({ title, subtitle }) => (
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3. SUB-COMPONENTS
+// 4. SUB-COMPONENTS
 // ─────────────────────────────────────────────────────────────────────────────
 
 const HeroGallery = ({ images, title }) => {
@@ -191,7 +480,6 @@ const AddReviewForm = ({ propertyId, onReviewAdded }) => {
     setError("");
 
     try {
-      // NOTE: Ensure your backend uses this exact route pattern (either /add/:id or /create/:id depending on what you set up)
       const res = await axios.post(`http://localhost:5000/api/review/add/${propertyId}`, {
         rating,
         comment
@@ -247,16 +535,6 @@ const AddReviewForm = ({ propertyId, onReviewAdded }) => {
   );
 };
 
-const DateField = ({ label, value, onChange, min, disabled }) => (
-  <div className="flex flex-col gap-1 relative">
-    <span className="text-[10px] font-semibold uppercase tracking-widest dark:text-white/35 text-black/40" style={{ letterSpacing: "0.12em" }}>{label}</span>
-    <div className="relative flex items-center group">
-      <CalendarDays size={13} style={{ color: GOLD_MUTED, position: 'absolute', left: '12px' }} strokeWidth={1.7} className="pointer-events-none" />
-      <input type="date" value={value} onChange={onChange} min={min} disabled={disabled} className="w-full pl-8 pr-2 py-2.5 rounded-xl text-xs transition-colors duration-200 focus:outline-none dark:bg-[#0C0E14] dark:border dark:border-white/[0.10] dark:hover:border-[#C8A97E]/35 dark:focus:border-[#C8A97E]/60 bg-[#FAF8F4] border border-black/[0.09] hover:border-[#C8A97E]/40 focus:border-[#C8A97E]/60 dark:text-white/70 text-black/70 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed" style={{ colorScheme: 'dark' }} />
-    </div>
-  </div>
-);
-
 const GuestCounter = ({ guests, setGuests, disabled }) => (
   <div className="flex flex-col gap-1">
     <span className="text-[10px] font-semibold uppercase tracking-widest dark:text-white/35 text-black/40" style={{ letterSpacing: "0.12em" }}>Guests</span>
@@ -274,31 +552,37 @@ const GuestCounter = ({ guests, setGuests, disabled }) => (
   </div>
 );
 
-const BookingCard = ({ property }) => {
+const BookingCard = ({ property, bookingData }) => {
   const [guests, setGuests] = useState(2);
-  const [checkIn, setCheckIn] = useState("");
-  const [checkOut, setCheckOut] = useState("");
   const [requesting, setRequesting] = useState(false);
   const [apiError, setApiError] = useState("");
 
-  const isSoldOut = property.isAvailable === false;
-  const nights = (checkIn && checkOut) ? Math.max(1, Math.ceil((new Date(checkOut) - new Date(checkIn)) / (1000 * 60 * 60 * 24))) : 4;
+  // Use data supplied directly from the VoyaCalendar selection
+  const { checkIn, checkOut, totalNights } = bookingData;
+  const nights = totalNights > 0 ? totalNights : 0;
+  
   const subtotal = property.pricePerNight * nights;
   const serviceFee = Math.round(subtotal * 0.075);
   const total = subtotal + serviceFee;
-  const today = new Date().toISOString().split('T')[0];
 
   const handleRequest = async () => {
-    if (isSoldOut) return;
-    if (!checkIn || !checkOut) return setApiError("Please select Check-in and Check-out dates.");
-    if (new Date(checkOut) <= new Date(checkIn)) return setApiError("Check-out date must be after Check-in date.");
+    if (!checkIn || !checkOut || nights === 0) {
+        return setApiError("Please select Check-in and Check-out dates on the calendar first.");
+    }
 
     setRequesting(true); setApiError("");
     try {
-      const payload = { propertyId: property.id, checkInDate: checkIn, checkOutDate: checkOut, guests, totalPrice: total };
-      const response = await axios.post(`http://localhost:5000/api/booking/create/${property.id}`, payload, { withCredentials: true });
+      const payload = { 
+          propertyId: property.id, 
+          checkIn, 
+          checkOut, 
+          guests, 
+          totalNights: nights,
+          totalPrice: total 
+      };
+      // Point to the updated Checkout Session route
+      const response = await axios.post(`http://localhost:5000/api/Booking/create-checkout-session`, payload, { withCredentials: true });
       
-      // Redirect to Stripe Checkout!
       if (response.data.url) {
           window.location.href = response.data.url;
       }
@@ -325,35 +609,41 @@ const BookingCard = ({ property }) => {
           )}
         </AnimatePresence>
 
-        <div className="grid grid-cols-2 gap-2">
-          <DateField label="Check-in" min={today} value={checkIn} onChange={(e) => setCheckIn(e.target.value)} disabled={isSoldOut} />
-          <DateField label="Check-out" min={checkIn || today} value={checkOut} onChange={(e) => setCheckOut(e.target.value)} disabled={isSoldOut} />
+        {/* ── Read-only Date Display (Linked to Calendar) ── */}
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-semibold uppercase tracking-widest dark:text-white/35 text-black/40" style={{ letterSpacing: "0.12em" }}>Check-in</span>
+            <div className={`px-3 py-2.5 rounded-xl text-xs dark:bg-[#0C0E14] dark:border dark:border-white/[0.10] bg-[#FAF8F4] border border-black/[0.09] ${!checkIn ? "dark:text-white/30 text-black/30" : "dark:text-[#F2EDE6] text-[#1A1712]"}`}>
+              {checkIn ? checkIn.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Select date"}
+            </div>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-semibold uppercase tracking-widest dark:text-white/35 text-black/40" style={{ letterSpacing: "0.12em" }}>Check-out</span>
+            <div className={`px-3 py-2.5 rounded-xl text-xs dark:bg-[#0C0E14] dark:border dark:border-white/[0.10] bg-[#FAF8F4] border border-black/[0.09] ${!checkOut ? "dark:text-white/30 text-black/30" : "dark:text-[#F2EDE6] text-[#1A1712]"}`}>
+              {checkOut ? checkOut.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : "Select date"}
+            </div>
+          </div>
         </div>
-        <GuestCounter guests={guests} setGuests={setGuests} disabled={isSoldOut} />
+
+        <GuestCounter guests={guests} setGuests={setGuests} disabled={false} />
         <div className="h-px dark:bg-white/[0.07] bg-black/[0.07]" />
         
         <div className="space-y-2.5">
-          <div className="flex items-center justify-between"><span className="text-sm dark:text-white/50 text-black/50">{formatPrice(property.pricePerNight)} × {nights} nights</span><span className="text-sm dark:text-white/65 text-black/65 font-medium">{formatPrice(subtotal)}</span></div>
+          <div className="flex items-center justify-between"><span className="text-sm dark:text-white/50 text-black/50">{formatPrice(property.pricePerNight)} × {nights} {nights === 1 ? 'night' : 'nights'}</span><span className="text-sm dark:text-white/65 text-black/65 font-medium">{formatPrice(subtotal)}</span></div>
           <div className="flex items-center justify-between"><span className="text-sm dark:text-white/50 text-black/50">Voya service fee</span><span className="text-sm dark:text-white/65 text-black/65 font-medium">{formatPrice(serviceFee)}</span></div>
           <div className="flex items-center justify-between pt-2.5" style={{ borderTop: `1px solid rgba(200,169,126,0.14)` }}><span className="text-sm font-semibold dark:text-[#F2EDE6] text-[#1A1712]">Total</span><span className="text-sm font-bold dark:text-[#F2EDE6] text-[#1A1712]">{formatPrice(total)}</span></div>
         </div>
 
-        {isSoldOut ? (
-          <div className="w-full py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2" style={{ backgroundColor: "rgba(240, 107, 107, 0.08)", border: `1px solid rgba(240, 107, 107, 0.25)` }}>
-            <AlertCircle size={14} style={{ color: "#F06B6B" }} /><span style={{ color: "#F06B6B" }}>Not Available</span>
-          </div>
-        ) : (
-          <motion.button onClick={handleRequest} disabled={requesting} whileTap={{ scale: 0.98 }} className="w-full py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center transition-colors disabled:opacity-70" style={{ backgroundColor: GOLD, color: "#0C0E14" }}>
-            {requesting ? "Redirecting to Stripe..." : "Reserve Sanctuary"}
-          </motion.button>
-        )}
+        <motion.button onClick={handleRequest} disabled={requesting || !checkIn || !checkOut} whileTap={{ scale: 0.98 }} className="w-full py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center transition-colors disabled:opacity-70 disabled:cursor-not-allowed" style={{ backgroundColor: GOLD, color: "#0C0E14" }}>
+          {requesting ? "Preparing portal..." : "Reserve Sanctuary"}
+        </motion.button>
       </div>
     </motion.div>
   );
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. MAIN COMPONENT — PropertyDetails
+// 5. MAIN COMPONENT — PropertyDetails
 // ─────────────────────────────────────────────────────────────────────────────
 export default function PropertyDetails({ propertyId }) {
   const [isSaved, setIsSaved] = useState(false);
@@ -361,6 +651,10 @@ export default function PropertyDetails({ propertyId }) {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+
+  // Calendar & Booking State (Elevated so both the Calendar and Sidebar can access it)
+  const [blockedDates, setBlockedDates] = useState([]);
+  const [bookingData, setBookingData] = useState({ checkIn: null, checkOut: null, totalNights: 0, totalPrice: 0 });
 
   useEffect(() => {
     if (!document.getElementById("voya-gfonts")) {
@@ -414,14 +708,24 @@ export default function PropertyDetails({ propertyId }) {
         setNotFound(true);
       }
 
-      // --- 2. TRY TO FETCH REVIEWS (Independent of Property) ---
+      // --- 2. TRY TO FETCH REVIEWS & BLOCKED DATES ---
       if (!propertyId?.toString().startsWith("mock_") && propertyId !== "default") {
           try {
             const reviewsRes = await axios.get(`http://localhost:5000/api/review/property/${propertyId}`);
             setReviews(reviewsRes.data.data || []);
           } catch (reviewError) {
             console.error("Review Fetch Error (Ignoring so page still loads):", reviewError.message);
-            setReviews([]); // Default to 0 reviews if the backend route isn't working yet
+            setReviews([]); 
+          }
+
+          // Fetch Blocked Dates from Backend
+          try {
+            const datesRes = await axios.get(`http://localhost:5000/api/Booking/property/${propertyId}/dates`);
+            if (datesRes.data.success) {
+                setBlockedDates(datesRes.data.data);
+            }
+          } catch (datesError) {
+            console.error("Blocked Dates Fetch Error:", datesError.message);
           }
       }
 
@@ -493,6 +797,18 @@ export default function PropertyDetails({ propertyId }) {
 
             <div className="w-full h-px dark:bg-white/[0.07] bg-black/[0.07] my-10" />
 
+            {/* ── CALENDAR COMPONENT ── */}
+            <div className="mb-10">
+               <h2 className="text-xl font-semibold dark:text-[#F2EDE6] text-[#1A1712] mb-6" style={{ fontFamily: "'Playfair Display', Georgia, serif" }}>Select your dates</h2>
+               <VoyaCalendar 
+                  pricePerNight={property.pricePerNight} 
+                  bookedDates={blockedDates} 
+                  onRangeSelect={setBookingData} 
+               />
+            </div>
+            
+            <div className="w-full h-px dark:bg-white/[0.07] bg-black/[0.07] my-10" />
+
             {/* ── REAL REVIEWS SECTION ── */}
             <div className="mb-6">
               <h2 className="text-xl font-semibold dark:text-[#F2EDE6] text-[#1A1712] mb-6" style={{ fontFamily: "'Playfair Display', Georgia, serif" }}>Guest Reflections</h2>
@@ -512,8 +828,9 @@ export default function PropertyDetails({ propertyId }) {
             </div>
           </div>
 
-          <div className="hidden lg:block lg:sticky lg:top-24 lg:self-start">
-            <BookingCard property={property} />
+          <div className="hidden lg:block lg:sticky lg:top-24 lg:self-start z-10">
+            {/* ── Pass the booking data from VoyaCalendar into the BookingCard ── */}
+            <BookingCard property={property} bookingData={bookingData} />
           </div>
         </div>
 
@@ -529,15 +846,9 @@ export default function PropertyDetails({ propertyId }) {
             </div>
           </div>
           
-          {property.isAvailable === false ? (
-             <div className="px-6 py-2.5 rounded-xl text-sm font-semibold border flex items-center gap-1.5" style={{ backgroundColor: "rgba(240, 107, 107, 0.08)", borderColor: "rgba(240, 107, 107, 0.25)", color: "#F06B6B" }}>
-                <AlertCircle size={14} /> Sold Out
-             </div>
-          ) : (
-            <motion.button whileTap={{ scale: 0.97 }} className="px-6 py-3 rounded-xl text-sm font-semibold transition-colors duration-200" style={{ backgroundColor: GOLD, color: "#0C0E14" }}>
-              Reserve Sanctuary
-            </motion.button>
-          )}
+          <motion.button whileTap={{ scale: 0.97 }} className="px-6 py-3 rounded-xl text-sm font-semibold transition-colors duration-200" style={{ backgroundColor: GOLD, color: "#0C0E14" }} onClick={() => window.scrollTo({ top: 600, behavior: "smooth"})}>
+            Reserve Sanctuary
+          </motion.button>
         </motion.div>
       </div>
     </motion.div>
