@@ -382,7 +382,7 @@ export default function Signup() {
     };
 
     try {
-      const response = await axios.post('http://localhost:5000/api/user/signup', payload);
+      const response = await axios.post('https://voya-backend-cmoy.onrender.com/api/user/signup', payload);
       console.log("Signup success:", response.data);
       setIsSuccess(true);
     } catch (err) {

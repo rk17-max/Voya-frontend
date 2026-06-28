@@ -4,7 +4,7 @@ import axios from 'axios';
 export const api = axios.create({
   // In development, talk to Port 5000. 
   // Later, when you deploy to Render/AWS, we just change this ONE string.
-  baseURL: 'http://localhost:5000/api/v1',
+  baseURL: 'https://voya-backend-cmoy.onrender.com/api/v1',
   
   headers: {
     'Content-Type': 'application/json',

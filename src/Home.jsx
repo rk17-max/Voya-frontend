@@ -674,8 +674,8 @@ const PropertyModal = ({ isOpen, onClose, onPropertySaved, propertyToEdit }) => 
     try {
       // Switch between POST and PUT endpoints based on isEditing
       const url = isEditing 
-        ? `http://localhost:5000/api/property/update/${propertyToEdit.id}` // IMPORTANT: Ensure your backend has this PUT endpoint!
-        : "http://localhost:5000/api/property/create";
+        ? `https://voya-backend-cmoy.onrender.com/api/property/update/${propertyToEdit.id}` // IMPORTANT: Ensure your backend has this PUT endpoint!
+        : "https://voya-backend-cmoy.onrender.com/api/property/create";
         
       const method = isEditing ? "put" : "post";
 
@@ -1014,11 +1014,11 @@ export default function Home({ userProfile }) {
         if (creatorMode) {
             const userId = userProfile?._id || userProfile?.id;
             if (!userId) return;
-            response = await axios.get(`http://localhost:5000/api/property/fetchProperty/${userId}`, {
+            response = await axios.get(`https://voya-backend-cmoy.onrender.com/api/property/fetchProperty/${userId}`, {
                 withCredentials: true 
             });
         } else {
-            response = await axios.get("http://localhost:5000/api/property/fetch");
+            response = await axios.get("https://voya-backend-cmoy.onrender.com/api/property/fetch");
         }
 
         let apiData = response.data.data || response.data.properties || response.data;
@@ -1070,7 +1070,7 @@ export default function Home({ userProfile }) {
 
   const handlePropertyDelete = async (id) => {
       try {
-          await axios.delete(`http://localhost:5000/api/property/delete/${id}`, {
+          await axios.delete(`https://voya-backend-cmoy.onrender.com/api/property/delete/${id}`, {
               withCredentials: true
           });
           setProperties(prev => prev.filter(p => p.id !== id));

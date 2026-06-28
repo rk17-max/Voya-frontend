@@ -480,7 +480,7 @@ const AddReviewForm = ({ propertyId, onReviewAdded }) => {
     setError("");
 
     try {
-      const res = await axios.post(`http://localhost:5000/api/review/add/${propertyId}`, {
+      const res = await axios.post(`https://voya-backend-cmoy.onrender.com/api/review/add/${propertyId}`, {
         rating,
         comment
       }, { withCredentials: true });
@@ -581,7 +581,7 @@ const BookingCard = ({ property, bookingData }) => {
           totalPrice: total 
       };
       // Point to the updated Checkout Session route
-      const response = await axios.post(`http://localhost:5000/api/Booking/create-checkout-session`, payload, { withCredentials: true });
+      const response = await axios.post(`https://voya-backend-cmoy.onrender.com/api/Booking/create-checkout-session`, payload, { withCredentials: true });
       
       if (response.data.url) {
           window.location.href = response.data.url;
@@ -668,7 +668,7 @@ export default function PropertyDetails({ propertyId }) {
     const fetchAllData = async () => {
       // --- 1. TRY TO FETCH PROPERTY ---
       try {
-        const propertyRes = await axios.get("http://localhost:5000/api/property/fetch", {
+        const propertyRes = await axios.get("https://voya-backend-cmoy.onrender.com/api/property/fetch", {
             withCredentials: true 
         });
         const apiData = propertyRes.data.data || propertyRes.data.properties || propertyRes.data;
@@ -711,7 +711,7 @@ export default function PropertyDetails({ propertyId }) {
       // --- 2. TRY TO FETCH REVIEWS & BLOCKED DATES ---
       if (!propertyId?.toString().startsWith("mock_") && propertyId !== "default") {
           try {
-            const reviewsRes = await axios.get(`http://localhost:5000/api/review/property/${propertyId}`);
+            const reviewsRes = await axios.get(`https://voya-backend-cmoy.onrender.com/api/review/property/${propertyId}`);
             setReviews(reviewsRes.data.data || []);
           } catch (reviewError) {
             console.error("Review Fetch Error (Ignoring so page still loads):", reviewError.message);
@@ -720,7 +720,7 @@ export default function PropertyDetails({ propertyId }) {
 
           // Fetch Blocked Dates from Backend
           try {
-            const datesRes = await axios.get(`http://localhost:5000/api/Booking/property/${propertyId}/dates`);
+            const datesRes = await axios.get(`https://voya-backend-cmoy.onrender.com/api/Booking/property/${propertyId}/dates`);
             if (datesRes.data.success) {
                 setBlockedDates(datesRes.data.data);
             }

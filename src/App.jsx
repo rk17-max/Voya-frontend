@@ -22,7 +22,7 @@ export default function App() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await axios.get('http://localhost:5000/api/user/details', {
+        const response = await axios.get('https://voya-backend-cmoy.onrender.com/api/user/details', {
           withCredentials: true
         });
         setIsAuth(true);
@@ -41,7 +41,7 @@ export default function App() {
   // ── Shared Logout Function ──
   const handleLogout = async () => {
     try {
-      await axios.post('http://localhost:5000/api/user/logout', {}, {
+      await axios.post('https://voya-backend-cmoy.onrender.com/api/user/logout', {}, {
         withCredentials: true
       }); 
     } catch (err) {

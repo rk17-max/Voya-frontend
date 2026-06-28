@@ -554,7 +554,7 @@ const EditMode = ({ profile, onCancel, onSaved }) => {
     try {
       // ↓ Replace the URL with your real endpoint; keep withCredentials for JWT auth
       await axios.put(
-        "http://localhost:5000/api/user/update",
+        "https://voya-backend-cmoy.onrender.com/api/user/update",
         {
           firstname: formData.firstname.trim(),
           lastname:  formData.lastname.trim(),
